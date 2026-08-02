@@ -1,0 +1,6 @@
+{
+  "name": "X Shadowban Checker",
+  "description": "X (旧Twitter) のシャドウバン（検索BAN・検索補完除外・ゴーストBAN・リプライ降格）の状態をリアルタイムで詳細チェックするツール。原因分析と対処方法アドバイス、AI詳細診断機能付き。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
