@@ -116,30 +116,21 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
   let isGhostBan = false;
   let isReplyDeboosted = false;
 
-  if (handleLower.includes('ban') || handleLower.includes('shadow')) {
+  if (handleLower.includes('test_searchban') || handleLower.includes('test_ban')) {
     isSearchBan = true;
     isGhostBan = true;
-  } else if (handleLower.includes('deboost') || handleLower.includes('warn')) {
+  } else if (handleLower.includes('test_deboost') || handleLower.includes('test_warn')) {
     isSearchSuggestionBan = true;
     isReplyDeboosted = true;
-  } else if (handleLower.includes('ghost')) {
+  } else if (handleLower.includes('test_ghost')) {
     isGhostBan = true;
-  } else if (isSuspended) {
+  } else if (isSuspended || handleLower.includes('test_suspended')) {
     isSearchBan = true;
     isSearchSuggestionBan = true;
     isGhostBan = true;
     isReplyDeboosted = true;
-  } else {
-    // Standard normal account check (Deterministic based on handle character sum for realistic variation when testing different usernames)
-    const charCodeSum = cleanHandle.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    // ~90% clear rate, ~10% mild warning rate to reflect realistic shadowban occurrences
-    if (charCodeSum % 17 === 0) {
-      isReplyDeboosted = true;
-    }
-    if (charCodeSum % 29 === 0) {
-      isSearchSuggestionBan = true;
-    }
   }
+  // Standard normal accounts default to 100% ALL_CLEAR (no arbitrary false positives)
 
   let healthScore = 100;
   if (isSearchBan) healthScore -= 40;

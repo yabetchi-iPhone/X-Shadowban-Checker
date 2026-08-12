@@ -30,7 +30,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setInputVal('');
   };
 
-  const sampleHandles = ['X', 'openai', 'gemini_app', 'japan'];
+  const sampleHandles = ['yabetchi_iPhone', 'X', 'openai', 'gemini_app'];
+  const testHandles = ['test_ban', 'test_deboost', 'test_ghost'];
 
   return (
     <div className="w-full max-w-3xl mx-auto my-8 px-4">
@@ -99,10 +100,47 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           )}
 
           {/* Quick handle samples & History */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs">
-            <div className="flex flex-wrap items-center gap-1.5 text-slate-500 dark:text-slate-400">
-              <span className="font-medium text-slate-600 dark:text-slate-300">サンプル:</span>
-              {sampleHandles.map((handle) => (
+          <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <span className="font-medium text-slate-600 dark:text-slate-300">サンプル:</span>
+                {sampleHandles.map((handle) => (
+                  <button
+                    key={handle}
+                    type="button"
+                    onClick={() => {
+                      setInputVal(handle);
+                      onSearch(handle);
+                    }}
+                    disabled={isLoading}
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 rounded-md transition-colors font-mono cursor-pointer disabled:opacity-50"
+                  >
+                    @{handle}
+                  </button>
+                ))}
+              </div>
+
+              {history.length > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                  <span className="font-medium text-slate-400 dark:text-slate-500">最近のチェック:</span>
+                  {history.slice(0, 3).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onSelectHistory(item.username)}
+                      disabled={isLoading}
+                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 hover:text-sky-700 dark:hover:bg-sky-950 text-slate-700 dark:text-slate-300 rounded text-xs font-mono transition-colors"
+                    >
+                      @{item.username}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+              <span className="font-medium text-slate-500 dark:text-slate-400">BAN状態テスト用:</span>
+              {testHandles.map((handle) => (
                 <button
                   key={handle}
                   type="button"
@@ -111,29 +149,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                     onSearch(handle);
                   }}
                   disabled={isLoading}
-                  className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 rounded-md transition-colors font-mono cursor-pointer disabled:opacity-50"
+                  className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 border border-rose-200 dark:border-rose-900/50 rounded font-mono cursor-pointer"
                 >
                   @{handle}
                 </button>
               ))}
             </div>
-
-            {history.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                <span className="font-medium text-slate-400 dark:text-slate-500">最近のチェック:</span>
-                {history.slice(0, 3).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => onSelectHistory(item.username)}
-                    disabled={isLoading}
-                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 hover:text-sky-700 dark:hover:bg-sky-950 text-slate-700 dark:text-slate-300 rounded text-xs font-mono transition-colors"
-                  >
-                    @{item.username}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </form>
       </div>
