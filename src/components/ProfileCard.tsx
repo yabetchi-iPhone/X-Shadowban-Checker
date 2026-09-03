@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckResult } from '../types';
-import { ShieldCheck, AlertTriangle, XCircle, ExternalLink, Share2, Copy, Check, Clock } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, XCircle, ExternalLink, Share2, Copy, Check, Clock, Sparkles, Activity, Link2, MessageSquare, Repeat } from 'lucide-react';
 
 interface ProfileCardProps {
   result: CheckResult;
@@ -62,12 +62,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ result }) => {
     const text = `【X シャドウバン結果】
 アカウント: @${result.username}
 判定: ${result.overallStatus === 'ALL_CLEAR' ? '正常 (All Clear)' : result.overallStatus}
-健全度: ${result.overallHealthScore}/100
+健全度: ${result.overallHealthScore}/100${result.confidenceScore ? ` (確信度: ${result.confidenceScore}%)` : ''}
 ・検索BAN: ${result.checks.searchBan.status === 'ok' ? 'OK' : 'BAN'}
 ・検索補完BAN: ${result.checks.searchSuggestionBan.status === 'ok' ? 'OK' : 'BAN'}
 ・ゴーストBAN: ${result.checks.ghostBan.status === 'ok' ? 'OK' : 'BAN'}
 ・リプライ降格: ${result.checks.replyDeboosting.status === 'ok' ? 'OK' : 'DEBOOSTED'}
-チェック時刻: ${formatTimestamp(result.checkedAt)}
+${result.riskFactors && result.riskFactors.length > 0 ? `リスク要因: ${result.riskFactors.join(' / ')}\n` : ''}チェック時刻: ${formatTimestamp(result.checkedAt)}
 #Xシャドウバンチェッカー`;
 
     navigator.clipboard.writeText(text);
@@ -122,9 +122,18 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ result }) => {
 
           <div className="flex flex-col sm:items-end gap-1 w-full sm:w-auto">
             {getStatusBadge()}
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
-              <Clock className="w-3 h-3" />
-              <span>計測: {formatTimestamp(result.checkedAt)}</span>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+              {result.confidenceScore && (
+                <span className="inline-flex items-center gap-1 font-semibold text-sky-600 dark:text-sky-400">
+                  <Sparkles className="w-3 h-3" />
+                  判定確信度 {result.confidenceScore}%
+                </span>
+              )}
+              <span>•</span>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span>{formatTimestamp(result.checkedAt)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -147,6 +156,77 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ result }) => {
             />
           </div>
         </div>
+
+        {/* Precision Insights & Algorithmic Summary */}
+        {result.algorithmicSummary && (
+          <div className="mt-5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs">
+            <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+              <Activity className="w-4 h-4 text-sky-500" />
+              <span>アルゴリズム解析インサイト</span>
+              {result.recentTweetsAnalyzed && result.recentTweetsAnalyzed > 0 ? (
+                <span className="text-[10px] font-normal px-2 py-0.5 bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 rounded-full">
+                  直近ポスト {result.recentTweetsAnalyzed}件解析
+                </span>
+              ) : null}
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              {result.algorithmicSummary}
+            </p>
+
+            {/* Behavior Metrics Badges */}
+            {result.behaviorMetrics && (
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+                <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <MessageSquare className="w-3 h-3 text-indigo-400" />
+                    リプライ比率
+                  </span>
+                  <span className={`font-mono font-bold text-xs mt-0.5 ${result.behaviorMetrics.replyRatio >= 80 ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {result.behaviorMetrics.replyRatio}%
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Link2 className="w-3 h-3 text-blue-400" />
+                    外部リンク率
+                  </span>
+                  <span className={`font-mono font-bold text-xs mt-0.5 ${result.behaviorMetrics.urlRatio >= 40 ? 'text-rose-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {result.behaviorMetrics.urlRatio}%
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Repeat className="w-3 h-3 text-emerald-400" />
+                    定型文重複率
+                  </span>
+                  <span className={`font-mono font-bold text-xs mt-0.5 ${result.behaviorMetrics.duplicateRatio >= 25 ? 'text-rose-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {result.behaviorMetrics.duplicateRatio}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Detected Risk Factors */}
+            {result.riskFactors && result.riskFactors.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                <span className="font-semibold text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  検出されたリスク要因:
+                </span>
+                <ul className="space-y-1 pl-1">
+                  {result.riskFactors.map((factor, idx) => (
+                    <li key={idx} className="text-slate-700 dark:text-slate-300 flex items-start gap-1.5 text-[11px]">
+                      <span className="text-rose-500 font-bold">•</span>
+                      <span>{factor}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quick External Testing Links */}
         <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">

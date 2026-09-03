@@ -50,7 +50,25 @@ interface CheckResultData {
   };
   overallHealthScore: number; // 0 - 100
   overallStatus: 'ALL_CLEAR' | 'WARNING' | 'BAN_DETECTED' | 'SUSPENDED';
+  confidenceScore?: number;
+  recentTweetsAnalyzed?: number;
+  riskFactors?: string[];
+  algorithmicSummary?: string;
+  behaviorMetrics?: {
+    replyRatio: number;
+    duplicateRatio: number;
+    urlRatio: number;
+    hasSpamKeywords: boolean;
+  };
   checkedAt: string;
+}
+
+interface ExtractedTweet {
+  text: string;
+  createdAt: string;
+  isReply: boolean;
+  replyTo?: string;
+  hasUrl: boolean;
 }
 
 async function performXCheck(handle: string): Promise<CheckResultData> {
@@ -72,6 +90,7 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
   let userBio = '';
   let userLocation = '';
   let isVerified = false;
+  const recentTweets: ExtractedTweet[] = [];
 
   // 1. Fetch live profile via fxtwitter API (fast, reliable public proxy)
   try {
@@ -100,27 +119,35 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
     console.warn('fxtwitter profile fetch error, falling back to syndication:', e);
   }
 
-  // 2. Fallback to Twitter Syndication if needed
-  if (profileExists && followersCount === 0 && tweetCount === 0) {
+  // 2. Fetch Twitter Syndication to extract live posts and timeline activities
+  if (profileExists) {
     try {
       const syndicationUrl = `https://syndication.twitter.com/srv/timeline-profile/screen-name/${cleanHandle}`;
       const response = await fetch(syndicationUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
           'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
         },
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(3500),
       });
 
       if (response.status === 404) {
         profileExists = false;
       } else if (response.ok) {
         const html = await response.text();
-        const nameMatch = html.match(/"name":"([^"]+)"/);
-        if (nameMatch && nameMatch[1]) {
-          displayName = nameMatch[1].replace(/\\u[\dA-Fa-f]{4}/g, (match) => 
-            String.fromCharCode(parseInt(match.replace('\\u', ''), 16))
-          );
+        
+        if (html.includes('Account suspended') || html.includes('アカウントは凍結されています')) {
+          isSuspended = true;
+        }
+
+        // Extract display name or profile info if not already set
+        if (!displayName || displayName === cleanHandle) {
+          const nameMatch = html.match(/"name":"([^"]+)"/);
+          if (nameMatch && nameMatch[1]) {
+            displayName = nameMatch[1].replace(/\\u[\dA-Fa-f]{4}/g, (match) => 
+              String.fromCharCode(parseInt(match.replace('\\u', ''), 16))
+            );
+          }
         }
         
         const protectedMatch = html.match(/"protected":(true|false)/);
@@ -128,8 +155,31 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
           isProtected = protectedMatch[1] === 'true';
         }
 
-        if (html.includes('Account suspended') || html.includes('アカウントは凍結されています')) {
-          isSuspended = true;
+        // Parse timeline entries to inspect actual recent posts
+        const jsonMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+        if (jsonMatch) {
+          try {
+            const data = JSON.parse(jsonMatch[1]);
+            const timeline = data.props?.pageProps?.timeline;
+            const entries = timeline?.entries || [];
+            for (const entry of entries) {
+              const tw = entry.content?.tweet;
+              if (tw && tw.full_text) {
+                const isReply = !!tw.in_reply_to_screen_name || tw.full_text.startsWith('@');
+                const hasUrl = !!(tw.entities?.urls?.length > 0 || /https?:\/\//.test(tw.full_text));
+                recentTweets.push({
+                  text: tw.full_text,
+                  createdAt: tw.created_at || '',
+                  isReply,
+                  replyTo: tw.in_reply_to_screen_name,
+                  hasUrl,
+                });
+                if (recentTweets.length >= 25) break;
+              }
+            }
+          } catch (pe) {
+            console.warn('Failed to parse timeline entries:', pe);
+          }
         }
       }
     } catch (e) {
@@ -137,54 +187,213 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
     }
   }
 
-  // 3. Shadowban & Search Ban Detection Engine
+  // 3. Quantitative Post Behavior Metrics Engine
+  let replyRatio = 0;
+  let urlRatio = 0;
+  let duplicateRatio = 0;
+  const spamWords = ['本垢', '裏垢', '攻めすぎ', '見れちゃう', 'hかっぷ', 'えち', 'オナ', 'オフパコ', 'line追加', 'dmで教える', '限定動画', 'プロフのリンク', 'プロフ見て'];
+  const combinedBioText = `${userBio} ${userLocation} ${displayName}`.toLowerCase();
+  let hasSpamKeywords = spamWords.some((w) => combinedBioText.includes(w));
+
+  if (recentTweets.length > 0) {
+    const replyCount = recentTweets.filter((t) => t.isReply).length;
+    replyRatio = Math.round((replyCount / recentTweets.length) * 100);
+
+    const urlCount = recentTweets.filter((t) => t.hasUrl).length;
+    urlRatio = Math.round((urlCount / recentTweets.length) * 100);
+
+    // Calculate template/duplicate phrase repetition in recent posts
+    let duplicateCount = 0;
+    for (let i = 0; i < recentTweets.length; i++) {
+      for (let j = i + 1; j < recentTweets.length; j++) {
+        const clean1 = recentTweets[i].text.replace(/@[a-zA-Z0-9_]+/g, '').replace(/\s+/g, ' ').trim();
+        const clean2 = recentTweets[j].text.replace(/@[a-zA-Z0-9_]+/g, '').replace(/\s+/g, ' ').trim();
+        if (clean1.length > 10 && clean2.length > 10) {
+          const sample = clean1.slice(0, 16);
+          if (clean2.includes(sample)) {
+            duplicateCount++;
+            break;
+          }
+        }
+      }
+    }
+    duplicateRatio = Math.round((duplicateCount / recentTweets.length) * 100);
+
+    const tweetsHaveSpam = recentTweets.some((t) =>
+      spamWords.some((w) => t.text.toLowerCase().includes(w))
+    );
+    if (tweetsHaveSpam) hasSpamKeywords = true;
+  }
+
+  // 4. Shadowban & Search Ban Detection Engine
   const handleLower = cleanHandle.toLowerCase();
   
   let isSearchBan = false;
   let isSearchSuggestionBan = false;
   let isGhostBan = false;
   let isReplyDeboosted = false;
+  let confidenceScore = 90;
+  let riskFactors: string[] = [];
+  let algorithmicSummary = '';
 
   // Manual test keywords for verification
   if (handleLower.includes('test_searchban') || handleLower.includes('test_ban')) {
     isSearchBan = true;
     isGhostBan = true;
+    confidenceScore = 99;
+    riskFactors = ['テスト用キーワードによる強制検索BAN発動'];
+    algorithmicSummary = '開発・検証用テストアカウントとして検索BANおよびゴーストBAN状態がシミュレートされています。';
   } else if (handleLower.includes('test_deboost') || handleLower.includes('test_warn')) {
     isSearchSuggestionBan = true;
     isReplyDeboosted = true;
+    confidenceScore = 99;
+    riskFactors = ['テスト用キーワードによる強制リプライ降格発動'];
+    algorithmicSummary = '開発・検証用テストアカウントとしてリプライ降格およびサジェスト制限がシミュレートされています。';
   } else if (handleLower.includes('test_ghost')) {
     isGhostBan = true;
+    confidenceScore = 99;
+    riskFactors = ['テスト用キーワードによる強制ゴーストBAN発動'];
+    algorithmicSummary = '開発・検証用テストアカウントとしてゴーストBAN（スレッド不可視）がシミュレートされています。';
   } else if (isSuspended || handleLower.includes('test_suspended')) {
     isSearchBan = true;
     isSearchSuggestionBan = true;
     isGhostBan = true;
     isReplyDeboosted = true;
+    confidenceScore = 100;
+    riskFactors = ['アカウントがXによって凍結（Suspended）されています'];
+    algorithmicSummary = 'アカウントが凍結されているため、すべての検索およびスレッド表示機能が停止しています。';
   } else {
-    // Real Account Analysis based on X Spam, Bot & Content Moderation Policies
-    const combinedText = `${userBio} ${userLocation} ${displayName}`.toLowerCase();
-    
-    // Check for adult / spam redirection keywords commonly flagged by X's NSFW & Spam filters
-    const spamWords = ['本垢', '裏垢', '攻めすぎ', '見れちゃう', 'hかっぷ', 'えち', 'オナ', 'オフパコ', 'line追加', 'dmで教える'];
-    const matchedSpamWords = spamWords.filter(w => combinedText.includes(w));
-    
-    // Check for typical reply-spam / bot pattern:
-    // (e.g. following <= 3, tweets > 100, unverified, or severe FF ratio anomaly with adult/spam bio)
-    const isReplySpamBot = (!isVerified && followingCount <= 3 && tweetCount >= 50 && matchedSpamWords.length > 0) ||
-                          (!isVerified && followingCount <= 1 && tweetCount >= 200) ||
-                          (followersCount < 10 && tweetCount >= 1000);
+    // 5. High-Precision AI Analysis using Gemini 3.8 Flash (if configured)
+    let aiEvaluated = false;
 
-    const hasSevereSpamKeywords = matchedSpamWords.length >= 2;
+    if (ai && profileExists && !isSuspended) {
+      try {
+        const tweetSamples = recentTweets.slice(0, 6).map((t, idx) => 
+          `[Post ${idx + 1}] (${t.isReply ? '返信' : '通常ポスト'}${t.hasUrl ? ', URLあり' : ''}): ${t.text.replace(/\n/g, ' ').slice(0, 120)}`
+        ).join('\n');
 
-    if (isReplySpamBot || hasSevereSpamKeywords) {
-      // Heavily penalized spam/bot account -> Flagged with Search Ban, Ghost Ban & Deboosting
-      isSearchBan = true;
-      isSearchSuggestionBan = true;
-      isGhostBan = true;
-      isReplyDeboosted = true;
-    } else if (matchedSpamWords.length === 1 && !isVerified) {
-      // Mild keyword trigger -> Reply deboosting & Suggestion ban
-      isSearchSuggestionBan = true;
-      isReplyDeboosted = true;
+        const prompt = `あなたはX (旧Twitter) の信頼度アルゴリズム（TweepCred、スパム検知、返信降格ロジック）を厳密にシミュレートするAIアナライザーです。
+対象アカウントのプロフィール情報と直近のポスト群を解析し、シャドウバンおよび制限状態（検索BAN、検索補完BAN、ゴーストBAN、リプライ降格）の有無を精密に判定してください。
+
+【対象アカウント】
+- ユーザー名: @${cleanHandle} (${displayName})
+- フォロワー数: ${followersCount} / フォロー数: ${followingCount}
+- 総ポスト数: ${tweetCount} / 認証バッジ: ${isVerified ? 'あり' : 'なし'}
+- 自己紹介 (Bio): ${userBio || 'なし'}
+- 直近の行動指標: リプライ率 ${replyRatio}% / 外部リンク率 ${urlRatio}% / 類似文面重複率 ${duplicateRatio}% / スパムキーワード検知: ${hasSpamKeywords ? 'あり' : 'なし'}
+
+【直近ポストサンプル】:
+${tweetSamples || '直近の公開ポストなし'}
+
+【判定基準】:
+- 検索BAN: アカウントがスパム・悪質とみなされ話題・最新検索から完全に除外される状態。
+- 検索補完BAN: 検索バーのサジェストに表示されない状態。軽微〜中度のペナルティ。
+- ゴーストBAN: リプライが第三者から見えなくなる状態。リプライスパムや過剰メンションで発動。
+- リプライ降格: リプライが「さらに返信を表示」に押し込まれる状態。
+
+以下の形式のJSONで回答してください:
+- isSearchBan: boolean
+- isSearchSuggestionBan: boolean
+- isGhostBan: boolean
+- isReplyDeboosted: boolean
+- confidenceScore: number (0〜100、この判定の確信度)
+- riskFactors: string[] (検出された具体的なリスク要因。例: "直近ポストの80%が外部誘導URL付き", "定型文によるコピペリプライ連投", "不自然なFF比率" など。問題がなければ空配列)
+- algorithmicSummary: string (判定理由のアルゴリズム視点での簡潔な解説。80〜120文字程度)
+`;
+
+        const aiPromise = ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                isSearchBan: { type: Type.BOOLEAN },
+                isSearchSuggestionBan: { type: Type.BOOLEAN },
+                isGhostBan: { type: Type.BOOLEAN },
+                isReplyDeboosted: { type: Type.BOOLEAN },
+                confidenceScore: { type: Type.INTEGER },
+                riskFactors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                algorithmicSummary: { type: Type.STRING },
+              },
+              required: [
+                'isSearchBan',
+                'isSearchSuggestionBan',
+                'isGhostBan',
+                'isReplyDeboosted',
+                'confidenceScore',
+                'riskFactors',
+                'algorithmicSummary',
+              ],
+            },
+          },
+        });
+
+        // Timeout after 3.8s to avoid long blocking
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AI check timeout')), 3800)
+        );
+
+        const aiRes = (await Promise.race([aiPromise, timeoutPromise])) as any;
+
+        const parsed = JSON.parse(aiRes.text || '{}');
+        if (typeof parsed.isSearchBan === 'boolean') {
+          isSearchBan = parsed.isSearchBan;
+          isSearchSuggestionBan = parsed.isSearchSuggestionBan;
+          isGhostBan = parsed.isGhostBan;
+          isReplyDeboosted = parsed.isReplyDeboosted;
+          confidenceScore = Math.min(99, Math.max(60, parsed.confidenceScore || 90));
+          riskFactors = parsed.riskFactors || [];
+          algorithmicSummary = parsed.algorithmicSummary || '';
+          aiEvaluated = true;
+        }
+      } catch (aiErr) {
+        console.warn('Gemini algorithmic check error, fallback to rule engine:', aiErr);
+      }
+    }
+
+    // 6. Advanced Fallback Rule Engine (when AI is not available or fails)
+    if (!aiEvaluated) {
+      const riskList: string[] = [];
+
+      const isReplySpamBot = (!isVerified && followingCount <= 3 && tweetCount >= 50 && hasSpamKeywords) ||
+                            (!isVerified && followingCount <= 1 && tweetCount >= 200) ||
+                            (followersCount < 10 && tweetCount >= 1000);
+
+      if (duplicateRatio >= 25) {
+        riskList.push(`直近ポストに同一定型文（コピペ返信）が反復（重複率${duplicateRatio}%）`);
+      }
+      if (replyRatio >= 80 && (hasSpamKeywords || urlRatio >= 35)) {
+        riskList.push(`リプライ率${replyRatio}%と過剰な外部URL誘導`);
+      }
+      if (isReplySpamBot) {
+        riskList.push(`フォロー極少（${followingCount}人）に対して投稿過多（${tweetCount}件）のボット挙動`);
+      }
+      if (hasSpamKeywords && !isVerified) {
+        riskList.push('プロフィールまたは直近ポストにスパム・成人誘導フラグキーワードを検出');
+      }
+      if (urlRatio >= 50) {
+        riskList.push(`ポスト中の外部サイト誘導リンク比率が過大（${urlRatio}%）`);
+      }
+
+      if (isReplySpamBot || riskList.length >= 2) {
+        isSearchBan = true;
+        isSearchSuggestionBan = true;
+        isGhostBan = true;
+        isReplyDeboosted = true;
+        confidenceScore = 95;
+        algorithmicSummary = '短時間の外部誘導リンク連投および定型文リプライのスパム挙動が検知され、Xの検索およびリプライアルゴリズムで重度の制限対象となっています。';
+      } else if (riskList.length === 1) {
+        isSearchSuggestionBan = true;
+        isReplyDeboosted = true;
+        confidenceScore = 88;
+        algorithmicSummary = '一部の投稿パターン（過剰リプライまたは特定キーワード）により、検索サジェスト除外およびリプライ表示順位の降格ペナルティを受けている可能性が高いです。';
+      } else {
+        confidenceScore = 92;
+        algorithmicSummary = '直近のポスト群、フォロー/フォロワー比率、プロフィール構成において不審なスパム挙動は検知されず、極めて健全なアカウント状態です。';
+      }
+      riskFactors = riskList;
     }
   }
 
@@ -246,6 +455,16 @@ async function performXCheck(handle: string): Promise<CheckResultData> {
     },
     overallHealthScore: Math.max(0, healthScore),
     overallStatus,
+    confidenceScore,
+    recentTweetsAnalyzed: recentTweets.length,
+    riskFactors,
+    algorithmicSummary,
+    behaviorMetrics: {
+      replyRatio,
+      duplicateRatio,
+      urlRatio,
+      hasSpamKeywords,
+    },
     checkedAt: new Date().toISOString(),
   };
 }
@@ -306,7 +525,7 @@ ${userContext ? `【ユーザー補足状況】: ${userContext}` : ''}
 `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',

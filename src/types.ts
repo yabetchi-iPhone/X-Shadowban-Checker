@@ -24,6 +24,16 @@ export interface CheckResult {
   };
   overallHealthScore: number;
   overallStatus: 'ALL_CLEAR' | 'WARNING' | 'BAN_DETECTED' | 'SUSPENDED';
+  confidenceScore?: number;
+  recentTweetsAnalyzed?: number;
+  riskFactors?: string[];
+  algorithmicSummary?: string;
+  behaviorMetrics?: {
+    replyRatio: number;
+    duplicateRatio: number;
+    urlRatio: number;
+    hasSpamKeywords: boolean;
+  };
   checkedAt: string;
 }
 
