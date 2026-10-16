@@ -1,18 +1,19 @@
-# X (旧Twitter) シャドウバンチェッカー (X Shadowban Checker)
+# X (旧Twitter) シャドウバンチェッカー (X Shadowban Checker PRO v3.0)
 
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4.0-38B2AC?logo=tailwind-css&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)
-![Google Gemini](https://img.shields.io/badge/Gemini%20AI-2.5%20%2F%20Flash-8E75B2?logo=google&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Gemini%20AI-3.8%20%2F%203.1%20Flash-8E75B2?logo=google&logoColor=white)
+![Security](https://img.shields.io/badge/Security-Hardened%20%26%20Rate--Limited-emerald?logo=shield)
 ![Vercel](https://img.shields.io/badge/Vercel-Deployable-black?logo=vercel&logoColor=white)
 
-X（旧Twitter）のアカウントがシャドウバン（制限）されているかどうかをリアルタイムで詳細に判定・可視化し、Gemini AI によるオーダーメイドの状況分析と解除アドバイスを提供するWebアプリケーションです。
+X（旧Twitter）のアカウントがシャドウバン（制限）されているかどうかをリアルタイムで詳細に判定・可視化し、投稿前の「AIポスト安全性診断」、乗っ取りやスパム被害を防ぐ「アカウントセキュリティ診断」、最新Gemini AIによる回復アドバイスを提供するオールインワンWebアプリケーションです。
 
 ---
 
-## 🌟 主な機能
+## 🌟 主な機能 (PRO v3.0)
 
 ### 1. 4種類のシャドウバン項目を個別判定
 - **検索BAN (Search Ban)**: 話題・最新タブの検索結果にポストが表示されるかを検証
@@ -20,33 +21,30 @@ X（旧Twitter）のアカウントがシャドウバン（制限）されてい
 - **ゴーストBAN (Ghost Ban / Thread Ban)**: リプライ（返信）が第三者から不可視（非表示）になっていないかを検証
 - **リプライ降格 (Reply Deboosting)**: リプライが「さらに返信を表示」や不適切折りたたみに追いやられていないかを検証
 
-### 2. アカウント健全度スコア & 高精度アルゴリズム解析
+### 2. アカウント健全度スコア & 行動メトリクス解析
 - **判定確信度スコア (60〜99%)**: 直近ポストの取得状況やアルゴリズム解析の一致度を数値化して表示。
 - **直近ポスト挙動メトリクス解析**:
   - **リプライ比率**: リプライの割合を算出し、過剰なリプライ連投スパムを検出。
   - **外部リンク率**: ポスト内の短縮URL・アフィリエイト・外部誘導比率を分析。
   - **定型文重複率**: 同一・類似文面による自動コピペリプライの反復を検知。
   - **検出された具体的リスク要因**: 判定根拠となった具体的な要因を箇条書きで可視化。
-- アカウントの状態を 0〜100点 のスコアとわかりやすいステータスバッジ（ALL CLEAR / WARNING / BAN DETECTED）で可視化。
-- X 上での直接検索テストリンク（話題検索、最新検索、プロフィール）をワンクリックで起動可能。
-- 判定結果のワンクリックコピーおよび X（Twitter）へのシェアポスト機能。
 
-### 3. Gemini AI による詳細診断・復旧アクションプラン
-- Google Gemini API を活用し、現在のアカウント状態に応じたオーダーメイド診断を実行。
-  - **リスクレベル判定**（Low / Medium / High / Critical）
-  - **推測される原因リスト**
-  - **ステップバイステップの回復アクションプラン**
-  - **推定復旧期間**
-  - **再発防止のための日常投稿テクニック**
-- ユーザーの最近の活動状況（連続投稿、外部ツール利用歴等）を任意で入力して診断精度を向上可能。
+### 3. 【新機能】AI ポスト安全性チェッカー (Post Safety Checker)
+- 投稿する前のポスト文・リプライ・引用ポストをAIが事前検査。
+- 最新のXアルゴリズム（Grokスパム分類器、リンク付きポストのインプレッション減衰、ハッシュタグ過多）をシミュレートし、**危険度スコア (0〜100%)** を算出。
+- **AI最適化リライト文面**: アカウントを安全に保ちつつエンゲージメントを最大化する文面を自動生成し、ワンクリックでコピー＆Xへ直接投稿可能。
 
-### 4. シャドウバンナレッジベース & よくある質問 (FAQ)
-- シャドウバン4種類の仕組み・発生原因・解除方法の完全ガイド。
-- インクリメンタルキーワード検索に対応した FAQ セクション。
+### 4. 【新機能】アカウント セキュリティ診断 (Security Audit Checklist)
+- 急増する「乗っ取り」「悪質連携アプリによる勝手なポスト」「フィッシング詐欺」を完全防御。
+- 認証アプリ・パスキーによる2FA、古いOAuth連携アプリの棚卸し、DMスパムフィルター設定などをインタラクティブにチェック。
+- アカウントの「安全達成度スコア」をリアルタイム算出し、Xの設定画面へ直行するリンクを提供。
 
-### 5. 診断履歴 & ダークモード対応
-- 過去の診断履歴（直近20件）をローカルストレージに自動保存し、履歴ドロワーから再チェック可能。
-- システム設定またはトグルボタンによるダークモード / ライトモード切り替え。
+### 5. 強化されたセキュリティ対策 (Security Hardening)
+- **API レート制限 (Rate Limiting)**: IPごとのトークンバケット方式によるDoS攻撃・自動スクレイピング・APIキー枯渇の防止。
+- **HTTP セキュリティヘッダー**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, 不要ヘッダー削除 (`x-powered-by`)。
+- **プロンプトインジェクション防御 (Prompt Injection Guard)**: ユーザー入力やプロフィールBioを安全なXMLデリミタタグで隔離し、AIへの悪意ある命令改ざんを完全に無効化。
+- **マルチモデル・自動フェイルオーバー**: `gemini-3.1-flash-lite`, `gemini-3-flash-preview`, `gemini-3.8-flash` への耐障害性フォールバック機構を搭載し、高可用性を実現。
+- **厳格な入力サニタイズ**: 正規表現 `^[a-zA-Z0-9_]{1,15}$` によるユーザー名バリデーション。
 
 ---
 
@@ -54,8 +52,9 @@ X（旧Twitter）のアカウントがシャドウバン（制限）されてい
 
 - **フロントエンド**: React 19, TypeScript, Vite, Tailwind CSS v4, Motion, Lucide React
 - **バックエンド**: Express (Node.js), TypeScript (`tsx` / `esbuild`)
-- **AI / LLM**: Google GenAI SDK (`@google/genai`), Gemini 2.5 / Flash
+- **AI / LLM**: Google GenAI SDK (`@google/genai`), Gemini 3.8 / 3.1 Flash
 - **デプロイ対応**: Vercel (`vercel.json`), Google Cloud Run, 各種 Node.js サーバー
+
 
 ---
 

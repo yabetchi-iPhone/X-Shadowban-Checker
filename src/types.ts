@@ -54,3 +54,36 @@ export interface HistoryItem {
   overallHealthScore: number;
   checkedAt: string;
 }
+
+export type RiskSeverity = 'low' | 'medium' | 'high';
+
+export interface CategoryRisk {
+  level: RiskSeverity;
+  note: string;
+}
+
+export interface PostSafetyCheckResult {
+  riskScore: number; // 0 - 100 (0 = very safe, 100 = critical danger)
+  riskLevel: 'SAFE' | 'CAUTION' | 'DANGER';
+  urlRisk: CategoryRisk;
+  spamRisk: CategoryRisk;
+  sentimentRisk: CategoryRisk;
+  hashtagRisk: CategoryRisk;
+  warnings: string[];
+  suggestions: string[];
+  optimizedPost: string;
+  advice: string;
+  checkedAt: string;
+}
+
+export interface SecurityAuditItem {
+  id: string;
+  category: 'authentication' | 'privacy' | 'apps' | 'hygiene';
+  title: string;
+  description: string;
+  recommendation: string;
+  riskIfIgnored: string;
+  actionUrl?: string;
+  actionLabel?: string;
+}
+
